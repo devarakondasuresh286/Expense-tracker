@@ -20,6 +20,15 @@ This is a simple Expense Tracker web application built with React and Vite.
 - Simple and clean interface
 - Built with React and Vite
 
+## Routes
+- `/home`
+- `/groups`
+- `/history`
+- `/dashboard`
+- `/profile`
+- `/login`
+- `/register`
+
 ## Next Steps
 - Add components for adding, listing, and managing expenses
 - Connect to a backend or local storage for data persistence

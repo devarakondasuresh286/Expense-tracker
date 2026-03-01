@@ -1,34 +1,60 @@
-import { useEffect, useState } from 'react';
-import { EXPENSE_CATEGORIES } from '../constants/expenseConstants';
+import { useState } from 'react';
+import { DEFAULT_EXPENSE_GROUP, EXPENSE_CATEGORIES, EXPENSE_GROUPS } from '../constants/expenseConstants';
 
-const defaultForm = { title: '', amount: '', category: EXPENSE_CATEGORIES[0], date: '' };
+const defaultForm = {
+  title: '',
+  amount: '',
+  category: EXPENSE_CATEGORIES[0],
+  group: DEFAULT_EXPENSE_GROUP,
+  date: '',
+};
+
+const createFormFromExpense = (expense) => {
+  if (!expense) {
+    return defaultForm;
+  }
+
+  return {
+    title: expense.title,
+    amount: String(expense.amount),
+    category: expense.category,
+    group: expense.group ?? DEFAULT_EXPENSE_GROUP,
+    date: expense.date,
+  };
+};
 
 function ExpenseForm({ addExpense, editExpense, editingExpense, cancelEditing }) {
-  const [form, setForm] = useState(defaultForm);
-
-  useEffect(() => {
-    if (!editingExpense) {
-      setForm(defaultForm);
-      return;
-    }
-
-    setForm({
-      title: editingExpense.title,
-      amount: String(editingExpense.amount),
-      category: editingExpense.category,
-      date: editingExpense.date,
-    });
-  }, [editingExpense]);
+  const [form, setForm] = useState(() => createFormFromExpense(editingExpense));
+  const [formMessage, setFormMessage] = useState({ type: '', text: '' });
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (formMessage.text) {
+      setFormMessage({ type: '', text: '' });
+    }
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!form.title.trim() || !form.amount || !form.date) {
+    if (!form.title.trim()) {
+      setFormMessage({ type: 'error', text: 'Please enter title.' });
+      return;
+    }
+
+    if (!form.amount) {
+      setFormMessage({ type: 'error', text: 'Please enter amount.' });
+      return;
+    }
+
+    if (Number(form.amount) <= 0) {
+      setFormMessage({ type: 'error', text: 'Please enter a valid amount.' });
+      return;
+    }
+
+    if (!form.date) {
+      setFormMessage({ type: 'error', text: 'Please select date.' });
       return;
     }
 
@@ -36,16 +62,24 @@ function ExpenseForm({ addExpense, editExpense, editingExpense, cancelEditing })
       title: form.title.trim(),
       amount: Number(form.amount),
       category: form.category,
+      group: form.group,
       date: form.date,
     };
 
     if (editingExpense) {
       editExpense(editingExpense.id, expenseData);
+      setFormMessage({ type: 'success', text: 'Expense updated successfully.' });
     } else {
       addExpense(expenseData);
+      setFormMessage({ type: 'success', text: 'Expense added successfully.' });
     }
 
-    setForm(defaultForm);
+    setForm(createFormFromExpense(null));
+  };
+
+  const handleCancel = () => {
+    setFormMessage({ type: '', text: '' });
+    cancelEditing();
   };
 
   return (
@@ -83,6 +117,19 @@ function ExpenseForm({ addExpense, editExpense, editingExpense, cancelEditing })
           </option>
         ))}
       </select>
+      <select
+        className="input"
+        name="group"
+        value={form.group}
+        onChange={handleInputChange}
+        aria-label="Expense group"
+      >
+        {EXPENSE_GROUPS.map((group) => (
+          <option key={group} value={group}>
+            {group}
+          </option>
+        ))}
+      </select>
       <input
         className="input"
         type="date"
@@ -95,9 +142,15 @@ function ExpenseForm({ addExpense, editExpense, editingExpense, cancelEditing })
         {editingExpense ? 'Update Expense' : 'Add Expense'}
       </button>
       {editingExpense ? (
-        <button className="btn secondary-btn" type="button" onClick={cancelEditing}>
+        <button className="btn secondary-btn" type="button" onClick={handleCancel}>
           Cancel
         </button>
+      ) : null}
+
+      {formMessage.text ? (
+        <p className={`form-message ${formMessage.type}`} role="status" aria-live="polite">
+          {formMessage.text}
+        </p>
       ) : null}
     </form>
   );

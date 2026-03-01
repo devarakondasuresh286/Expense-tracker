@@ -1,8 +1,13 @@
 import ExpenseItem from './ExpenseItem';
+import EmptyState from './EmptyState';
 
 function ExpenseList({ expenses, hasAnyExpenses, editExpense, deleteExpense }) {
   if (!hasAnyExpenses) {
-    return <li className="empty-state">No expenses yet. Add your first expense above.</li>;
+    return (
+      <li>
+        <EmptyState message="Add your first expense from the form to start tracking." />
+      </li>
+    );
   }
 
   if (expenses.length === 0) {
