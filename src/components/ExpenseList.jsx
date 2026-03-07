@@ -5,7 +5,7 @@ function ExpenseList({ expenses, hasAnyExpenses, editExpense, deleteExpense }) {
   if (!hasAnyExpenses) {
     return (
       <li>
-        <EmptyState message="Add your first expense from the form to start tracking." />
+        <EmptyState message="Add your first expense from Home to start tracking." />
       </li>
     );
   }

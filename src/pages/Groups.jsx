@@ -1,56 +1,125 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EXPENSE_GROUPS } from '../constants/expenseConstants';
+import { calculateCurrentUserBalances, calculateGroupTotal } from '../utils/finance';
 
-const GROUPS = EXPENSE_GROUPS;
-
-function getGroupForExpense(expense, fallbackIndex) {
-  if (GROUPS.includes(expense.group)) {
-    return expense.group;
-  }
-
-  const numericId = Number(expense.id);
-
-  if (Number.isFinite(numericId)) {
-    return GROUPS[Math.abs(numericId) % GROUPS.length];
-  }
-
-  return GROUPS[fallbackIndex % GROUPS.length];
-}
-
-function Groups({ expenses }) {
+function Groups({ groups, expenses, currentUser, friends, createGroup }) {
   const navigate = useNavigate();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState([]);
+  const [createMessage, setCreateMessage] = useState({ type: '', text: '' });
 
-  const groupedExpenses = useMemo(() => {
-    const buckets = GROUPS.reduce((accumulator, group) => {
-      accumulator[group] = [];
-      return accumulator;
-    }, {});
+  const groupSummaries = useMemo(() => {
+    return groups.map((group) => {
+      const groupTotal = calculateGroupTotal(expenses, group.id);
+      const balancesMap = calculateCurrentUserBalances({
+        expenses,
+        groupId: group.id,
+        currentUserId: currentUser.id,
+      });
 
-    expenses.forEach((expense, index) => {
-      const group = getGroupForExpense(expense, index);
-      buckets[group].push(expense);
+      const netBalance = Object.values(balancesMap).reduce((sum, value) => sum + Number(value), 0);
+
+      return {
+        group,
+        memberCount: group.memberIds.length,
+        groupTotal,
+        netBalance,
+      };
+    });
+  }, [groups, expenses, currentUser.id]);
+
+  const toggleFriend = (friendId) => {
+    setSelectedFriendIds((prev) => {
+      if (prev.includes(friendId)) {
+        return prev.filter((id) => id !== friendId);
+      }
+
+      return [...prev, friendId];
+    });
+  };
+
+  const handleCreateGroup = (event) => {
+    event.preventDefault();
+
+    const result = createGroup({
+      name: groupName,
+      friendIds: selectedFriendIds,
     });
 
-    return buckets;
-  }, [expenses]);
+    if (!result.ok) {
+      setCreateMessage({ type: 'error', text: result.message });
+      return;
+    }
+
+    setCreateMessage({ type: 'success', text: 'Group created successfully.' });
+    setGroupName('');
+    setSelectedFriendIds([]);
+    setIsCreateOpen(false);
+  };
 
   return (
     <section className="page-grid" aria-label="Groups page">
       <article className="card groups-card">
-        <h2 className="section-title">Expense Groups</h2>
-        <p className="expense-meta">Select a group to open its workspace.</p>
+        <div className="groups-header-row">
+          <h2 className="section-title">Groups</h2>
+          <button className="btn" type="button" onClick={() => setIsCreateOpen((prev) => !prev)}>
+            {isCreateOpen ? 'Close' : 'Create Group'}
+          </button>
+        </div>
+        <p className="expense-meta">Select a group to open details, balances, and members.</p>
+
+        {isCreateOpen ? (
+          <form className="groups-create-form" onSubmit={handleCreateGroup}>
+            <input
+              className="input"
+              type="text"
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              placeholder="Add group name"
+              aria-label="Add group name"
+            />
+
+            <fieldset className="split-members-fieldset">
+              <legend className="split-members-legend">Add friends from your friend list</legend>
+              <div className="split-members-grid">
+                {friends.map((friend) => (
+                  <label key={friend.id} className="split-member-option">
+                    <input
+                      type="checkbox"
+                      checked={selectedFriendIds.includes(friend.id)}
+                      onChange={() => toggleFriend(friend.id)}
+                    />
+                    <span>{friend.name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <button className="btn" type="submit">
+              Create Group
+            </button>
+          </form>
+        ) : null}
+
+        {createMessage.text ? (
+          <p className={`form-message ${createMessage.type}`} role="status" aria-live="polite">
+            {createMessage.text}
+          </p>
+        ) : null}
 
         <ul className="group-list" aria-label="Groups list">
-          {GROUPS.map((group) => (
-            <li key={group} className="group-item">
+          {groupSummaries.map(({ group, memberCount, groupTotal, netBalance }) => (
+            <li key={group.id} className="group-item">
               <button
-                type="button"
                 className="group-select-btn"
-                onClick={() => navigate(`/groups/${encodeURIComponent(group)}`)}
+                onClick={() => navigate(`/groups/${encodeURIComponent(group.id)}`)}
               >
-                <p className="expense-title">{group}</p>
-                <p className="expense-meta">{groupedExpenses[group].length} expense{groupedExpenses[group].length === 1 ? '' : 's'}</p>
+                <p className="expense-title">{group.name}</p>
+                <p className="expense-meta">
+                  {memberCount} members · Group total ${groupTotal.toFixed(2)} · Balance {netBalance >= 0 ? '+' : '-'}
+                  ${Math.abs(netBalance).toFixed(2)}
+                </p>
               </button>
             </li>
           ))}

@@ -12,9 +12,11 @@ function ExpenseItem({ expense, index, editExpense, deleteExpense }) {
       </div>
       <div className="expense-actions">
         <span className="expense-amount">${expense.amount.toFixed(2)}</span>
-        <button className="edit-btn" type="button" onClick={() => editExpense(expense)}>
-          Edit
-        </button>
+        {editExpense ? (
+          <button className="edit-btn" type="button" onClick={() => editExpense(expense)}>
+            Edit
+          </button>
+        ) : null}
         <button className="delete-btn" type="button" onClick={() => deleteExpense(expense.id)}>
           Delete
         </button>

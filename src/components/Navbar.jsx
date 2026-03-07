@@ -1,19 +1,13 @@
 import { NavLink } from 'react-router-dom';
 
-const centerNavItems = [
-  { label: 'Home', path: '/home' },
-  { label: 'Groups', path: '/groups' },
-  { label: 'History', path: '/history' },
-  { label: 'Dashboard', path: '/dashboard' },
+const navItems = [
+  { icon: '🏠', label: 'Home', path: '/home' },
+  { icon: '👥', label: 'Groups', path: '/groups' },
+  { icon: '📜', label: 'History', path: '/history' },
+  { icon: '📊', label: 'Dashboard', path: '/dashboard' },
 ];
 
-const rightNavItems = [
-  { label: 'Profile', path: '/profile' },
-  { label: 'Login', path: '/login' },
-  { label: 'Register', path: '/register' },
-];
-
-function Navbar() {
+function Navbar({ isOpen, onToggle }) {
   const renderNavLink = (item) => (
     <NavLink
       key={item.path}
@@ -22,23 +16,23 @@ function Navbar() {
       className={({ isActive }) =>
         isActive ? 'nav-link nav-link-active' : 'nav-link'
       }
+      title={item.label}
     >
-      {item.label}
+      <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+      {isOpen ? <span className="nav-label">{item.label}</span> : null}
     </NavLink>
   );
 
   return (
-    <header className="navbar-card">
-      <h1 className="title">Expense Tracker</h1>
-      <div className="navbar-main">
-        <nav className="navbar navbar-center" aria-label="Primary navigation">
-          {centerNavItems.map(renderNavLink)}
-        </nav>
-        <nav className="navbar navbar-right" aria-label="Secondary navigation">
-          {rightNavItems.map(renderNavLink)}
-        </nav>
-      </div>
-    </header>
+    <aside className={`navbar-card ${isOpen ? '' : 'navbar-card-collapsed'}`} aria-label="Sidebar navigation">
+      <button className="navbar-toggle" type="button" onClick={onToggle} aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}>
+        ☰
+      </button>
+      {isOpen ? <h1 className="title">Expense Tracker</h1> : null}
+      <nav className="navbar navbar-sidebar" aria-label="Primary navigation">
+        {navItems.map(renderNavLink)}
+      </nav>
+    </aside>
   );
 }
 
