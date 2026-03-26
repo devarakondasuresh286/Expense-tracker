@@ -3,10 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import ExpenseForm from '../components/ExpenseForm';
 import { EXPENSE_TYPES } from '../constants/expenseConstants';
 
-function Home({ addExpense, expenses, groups, currentUser, friends }) {
+function Home({
+  addExpense,
+  expenses,
+  groups,
+  currentUser,
+  friends,
+  searchUsers,
+  sendFriendRequest,
+  balances,
+}) {
   const [isExpenseTypeModalOpen, setIsExpenseTypeModalOpen] = useState(false);
   const [selectedExpenseType, setSelectedExpenseType] = useState(null);
-  const [showAllFriends, setShowAllFriends] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [friendActionMessage, setFriendActionMessage] = useState('');
   const navigate = useNavigate();
 
   const membersById = useMemo(() => {
@@ -56,26 +68,46 @@ function Home({ addExpense, expenses, groups, currentUser, friends }) {
     }, 0);
   }, [expenses]);
 
-  const friendsToShow = useMemo(() => {
-    if (showAllFriends) {
-      return allFriends;
-    }
-
-    return allFriends.slice(0, 5);
-  }, [allFriends, showAllFriends]);
-
-  const hasMoreFriends = allFriends.length > 5;
-
   const handleExpenseTypeSelect = (type) => {
     setSelectedExpenseType(type);
     setIsExpenseTypeModalOpen(false);
+  };
+
+  const handleSearchUsers = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    setFriendActionMessage('');
+
+    try {
+      const results = await searchUsers(query);
+      setSearchResults(results);
+    } catch (error) {
+      setFriendActionMessage(error.message);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSendRequest = async (userId) => {
+    try {
+      await sendFriendRequest(userId);
+      setSearchResults((prev) => prev.filter((item) => item.id !== userId));
+      setFriendActionMessage('Friend request sent.');
+    } catch (error) {
+      setFriendActionMessage(error.message);
+    }
   };
 
   return (
     <section className="home-page home-clean-layout" aria-label="Home page">
       <header className="home-header">
         <div>
-          <h2 className="title">Welcome Suresh</h2>
+          <h2 className="title">Welcome {currentUser?.name || 'User'}</h2>
         </div>
       </header>
 
@@ -91,12 +123,12 @@ function Home({ addExpense, expenses, groups, currentUser, friends }) {
       </section>
 
       <article className="card home-simple-section home-friends-card" aria-label="Friends list">
-        <h3 className="section-title">Friends List</h3>
+        <h3 className="section-title">Friends</h3>
         {allFriends.length === 0 ? (
           <p className="home-empty-copy">No friends in your account yet.</p>
         ) : (
           <ul className="home-name-list">
-            {friendsToShow.map((friend) => (
+            {allFriends.map((friend) => (
               <li key={friend.id} className="home-name-item">
                 {friend.name}
               </li>
@@ -104,15 +136,72 @@ function Home({ addExpense, expenses, groups, currentUser, friends }) {
           </ul>
         )}
 
-        {hasMoreFriends ? (
-          <button className="btn secondary-btn home-see-more-btn" type="button" onClick={() => setShowAllFriends((prev) => !prev)}>
-            {showAllFriends ? 'See Less' : 'See More'}
-          </button>
-        ) : null}
-
         <button className="btn secondary-btn home-add-friend-btn" type="button" onClick={() => navigate('/groups')}>
           + Add Friends
         </button>
+      </article>
+
+      <article className="card home-simple-section" aria-label="Find friends">
+        <h3 className="section-title">Find Friends</h3>
+        <div className="history-toolbar">
+          <input
+            className="input"
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search users by name or email"
+            aria-label="Search users"
+          />
+          <button className="btn" type="button" onClick={handleSearchUsers} disabled={isSearching}>
+            {isSearching ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        {searchResults.length === 0 ? (
+          <p className="home-empty-copy">Search to discover users you can add.</p>
+        ) : (
+          <ul className="expense-list">
+            {searchResults.map((user) => (
+              <li key={user.id} className="expense-item">
+                <div>
+                  <p className="expense-title">{user.name}</p>
+                  <p className="expense-meta">{user.email}</p>
+                </div>
+                <button className="btn" type="button" onClick={() => handleSendRequest(user.id)}>
+                  Send Request
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {friendActionMessage ? <p className="form-message success">{friendActionMessage}</p> : null}
+      </article>
+
+      <article className="card home-simple-section" aria-label="Balance summary">
+        <h3 className="section-title">Who Owes You</h3>
+        {balances?.whoOwesYou?.length ? (
+          <ul className="home-name-list">
+            {balances.whoOwesYou.map((entry) => (
+              <li key={entry.userId} className="home-name-item">
+                {entry.name} - ${Number(entry.amount).toFixed(2)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="home-empty-copy">No one owes you right now.</p>
+        )}
+
+        <h3 className="section-title">Who You Owe</h3>
+        {balances?.whoYouOwe?.length ? (
+          <ul className="home-name-list">
+            {balances.whoYouOwe.map((entry) => (
+              <li key={entry.userId} className="home-name-item">
+                {entry.name} - ${Number(entry.amount).toFixed(2)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="home-empty-copy">You are all settled up.</p>
+        )}
       </article>
 
       <div className="home-centered-actions" aria-label="Main actions">

@@ -764,6 +764,13 @@
   width: min(210px, 100%);
 }
 
+.history-toolbar {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, minmax(120px, 1fr)) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .expense-list {
   list-style: none;
   padding: 0;
@@ -1272,6 +1279,10 @@
   .group-workspace-grid {
     grid-template-columns: 1fr;
   }
+
+  .history-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1356,6 +1367,10 @@
     align-items: flex-start;
   }
 
+  .history-toolbar {
+    grid-template-columns: 1fr;
+  }
+
   .expense-actions {
     width: 100%;
     justify-content: flex-end;
@@ -1369,4 +1384,88 @@
   .monthly-chart-wrapper {
     height: 260px;
   }
+}
+
+body.dark-theme {
+  color: #e2e8f0;
+  background: #0f172a;
+}
+
+body.dark-theme .app {
+  background:
+    radial-gradient(circle at 6% 12%, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 44%),
+    radial-gradient(circle at 92% 10%, rgba(20, 184, 166, 0.18) 0%, rgba(20, 184, 166, 0) 42%),
+    linear-gradient(165deg, #020617 0%, #0f172a 46%, #1e293b 100%);
+}
+
+body.dark-theme .card,
+body.dark-theme .chart-card,
+body.dark-theme .monthly-card,
+body.dark-theme .navbar-card,
+body.dark-theme .member-modal-card,
+body.dark-theme .group-item,
+body.dark-theme .expense-item,
+body.dark-theme .chart-summary-item,
+body.dark-theme .balance-item,
+body.dark-theme .home-transaction-item,
+body.dark-theme .home-category-item,
+body.dark-theme .empty-state,
+body.dark-theme .empty-state-design {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+}
+
+body.dark-theme .title,
+body.dark-theme .section-title,
+body.dark-theme .expense-title,
+body.dark-theme .stat-value,
+body.dark-theme .expense-amount,
+body.dark-theme .chart-summary-value,
+body.dark-theme .home-summary-value,
+body.dark-theme .home-name-item,
+body.dark-theme .chart-legend-value {
+  color: #f8fafc;
+}
+
+body.dark-theme .expense-meta,
+body.dark-theme .stat-label,
+body.dark-theme .filter-label,
+body.dark-theme .chart-summary-label,
+body.dark-theme .chart-legend-percent,
+body.dark-theme .chart-legend-name,
+body.dark-theme .monthly-empty-state,
+body.dark-theme .chart-empty-state,
+body.dark-theme .empty-state,
+body.dark-theme .home-empty-copy,
+body.dark-theme .subtitle,
+body.dark-theme .home-summary-label,
+body.dark-theme .home-metric-label,
+body.dark-theme .split-members-legend,
+body.dark-theme .split-member-option {
+  color: #94a3b8;
+}
+
+body.dark-theme .input,
+body.dark-theme .secondary-btn,
+body.dark-theme .delete-btn,
+body.dark-theme .edit-btn,
+body.dark-theme .nav-link,
+body.dark-theme .chart-legend-item,
+body.dark-theme .split-members-fieldset {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+body.dark-theme .nav-link-active {
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.42) 0%, rgba(55, 48, 163, 0.42) 100%);
+  color: #bfdbfe;
+  border-color: #1d4ed8;
+}
+
+body.dark-theme .btn.secondary-btn:hover,
+body.dark-theme .delete-btn:hover,
+body.dark-theme .edit-btn:hover {
+  background: #334155;
 }

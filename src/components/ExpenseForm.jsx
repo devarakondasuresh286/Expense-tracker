@@ -6,6 +6,7 @@ const createDefaultForm = (mode, defaultGroupId, defaultPaidBy) => ({
   title: '',
   amount: '',
   category: EXPENSE_CATEGORIES[0],
+  notes: '',
   groupId: mode === EXPENSE_TYPES.GROUP ? defaultGroupId ?? '' : '',
   paidBy: mode === EXPENSE_TYPES.GROUP ? defaultPaidBy ?? '' : '',
   splitBetween: mode === EXPENSE_TYPES.GROUP && defaultPaidBy ? [defaultPaidBy] : [],
@@ -21,6 +22,7 @@ const createFormFromExpense = (expense, mode, defaultGroupId, defaultPaidBy) => 
     title: expense.title,
     amount: String(expense.amount),
     category: expense.category ?? EXPENSE_CATEGORIES[0],
+    notes: expense.notes ?? '',
     groupId: expense.groupId ?? defaultGroupId ?? '',
     paidBy: expense.paidBy ?? defaultPaidBy ?? '',
     splitBetween: Array.isArray(expense.splitBetween) ? expense.splitBetween : [],
@@ -129,6 +131,7 @@ function ExpenseForm({
       title: form.title.trim(),
       amount: Number(form.amount),
       category: form.category,
+      notes: form.notes?.trim() || '',
       type: mode,
       groupId: mode === EXPENSE_TYPES.GROUP ? form.groupId : null,
       paidBy: mode === EXPENSE_TYPES.GROUP ? form.paidBy : currentUser.id,
@@ -190,6 +193,14 @@ function ExpenseForm({
           </option>
         ))}
       </select>
+      <textarea
+        className="input"
+        name="notes"
+        value={form.notes}
+        onChange={handleInputChange}
+        placeholder="Notes (optional)"
+        rows={3}
+      />
 
       {mode === EXPENSE_TYPES.GROUP ? (
         <>

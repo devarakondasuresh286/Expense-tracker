@@ -7,7 +7,7 @@ const navItems = [
   { icon: '📊', label: 'Dashboard', path: '/dashboard' },
 ];
 
-function Navbar({ isOpen, onToggle }) {
+function Navbar({ isOpen, onToggle, onLogout, userName, isDarkMode, onToggleTheme }) {
   const renderNavLink = (item) => (
     <NavLink
       key={item.path}
@@ -29,9 +29,20 @@ function Navbar({ isOpen, onToggle }) {
         ☰
       </button>
       {isOpen ? <h1 className="title">Expense Tracker</h1> : null}
+      {isOpen ? <p className="expense-meta">{userName}</p> : null}
       <nav className="navbar navbar-sidebar" aria-label="Primary navigation">
         {navItems.map(renderNavLink)}
       </nav>
+      {isOpen ? (
+        <button className="btn secondary-btn" type="button" onClick={onToggleTheme}>
+          {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+        </button>
+      ) : null}
+      {isOpen ? (
+        <button className="btn secondary-btn" type="button" onClick={onLogout}>
+          Logout
+        </button>
+      ) : null}
     </aside>
   );
 }

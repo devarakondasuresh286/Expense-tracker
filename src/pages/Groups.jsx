@@ -39,10 +39,10 @@ function Groups({ groups, expenses, currentUser, friends, createGroup }) {
     });
   };
 
-  const handleCreateGroup = (event) => {
+  const handleCreateGroup = async (event) => {
     event.preventDefault();
 
-    const result = createGroup({
+    const result = await createGroup({
       name: groupName,
       friendIds: selectedFriendIds,
     });

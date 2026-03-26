@@ -7,85 +7,93 @@ import Groups from './pages/Groups';
 import History from './pages/History';
 import Dashboard from './pages/Dashboard';
 import GroupDetails from './pages/GroupDetails';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import AuthHome from './pages/AuthHome';
 import {
-  CURRENT_USER,
   DEFAULT_FILTER_CATEGORY,
-  DEFAULT_FRIENDS,
-  DEFAULT_GROUPS,
   EXPENSE_TYPES,
-  GROUPS_STORAGE_KEY,
-  STORAGE_KEY,
 } from './constants/expenseConstants';
-import { getPersonalExpenses, normalizeSplitBetween, todayDateString } from './utils/finance';
+import { getPersonalExpenses, normalizeSplitBetween } from './utils/finance';
+import { analyticsApi, authApi, expensesApi, groupsApi, usersApi } from './services/api';
 
-const readStorageArray = (storageKey) => {
-  const savedValue = localStorage.getItem(storageKey);
+const AUTH_TOKEN_KEY = 'expense_tracker_auth_token';
+const THEME_STORAGE_KEY = 'expense_tracker_theme';
 
-  if (!savedValue) {
-    return [];
-  }
-
-  try {
-    const parsedValue = JSON.parse(savedValue);
-    return Array.isArray(parsedValue) ? parsedValue : [];
-  } catch {
-    return [];
-  }
-};
-
-const normalizeExpense = (expense, groups) => {
-  const defaultGroupId = groups[0]?.id ?? null;
-  const legacyGroupName = typeof expense.group === 'string' ? expense.group : '';
-
-  let groupId = expense.groupId ?? null;
-  if (!groupId && legacyGroupName) {
-    const matchedGroup = groups.find((group) => group.name === legacyGroupName);
-    groupId = matchedGroup?.id ?? defaultGroupId;
-  }
-
-  const inferredType = expense.type || (groupId ? EXPENSE_TYPES.GROUP : EXPENSE_TYPES.PERSONAL);
-  const paidBy = expense.paidBy ?? CURRENT_USER.id;
-
-  return {
-    id: expense.id ?? Date.now(),
-    title: expense.title ?? 'Expense',
-    category: expense.category ?? 'Other',
-    type: inferredType,
-    groupId: inferredType === EXPENSE_TYPES.GROUP ? groupId : null,
-    paidBy: inferredType === EXPENSE_TYPES.GROUP ? paidBy : CURRENT_USER.id,
-    splitBetween:
-      inferredType === EXPENSE_TYPES.GROUP
-        ? normalizeSplitBetween(expense.splitBetween, paidBy ? [paidBy] : [])
-        : [],
-    amount: Number(expense.amount ?? 0),
-    date: expense.date ?? todayDateString(),
-  };
-};
+const normalizeExpense = (expense, currentUserId) => ({
+  id: expense.id,
+  title: expense.title,
+  category: expense.category,
+  type: expense.type || (expense.groupId ? EXPENSE_TYPES.GROUP : EXPENSE_TYPES.PERSONAL),
+  groupId: expense.groupId ?? null,
+  paidBy: expense.paidBy ?? currentUserId,
+  splitBetween: normalizeSplitBetween(expense.splitBetween, expense.paidBy ? [expense.paidBy] : []),
+  amount: Number(expense.amount ?? 0),
+  date: String(expense.date).split('T')[0],
+  notes: expense.notes ?? '',
+});
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [groups, setGroups] = useState(() => {
-    const savedGroups = readStorageArray(GROUPS_STORAGE_KEY);
-    return savedGroups.length > 0 ? savedGroups : DEFAULT_GROUPS;
-  });
-
-  const [expenses, setExpenses] = useState(() =>
-    readStorageArray(STORAGE_KEY).map((expense) => normalizeExpense(expense, DEFAULT_GROUPS)),
-  );
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) === 'dark');
+  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || '');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [outgoingRequests, setOutgoingRequests] = useState([]);
+  const [balances, setBalances] = useState({ whoOwesYou: [], whoYouOwe: [], byGroup: [] });
+  const [summary, setSummary] = useState({ totalMonthlySpending: 0, mostSpentCategory: null, categoryWise: [] });
   const [filterCategory, setFilterCategory] = useState(DEFAULT_FILTER_CATEGORY);
   const [toastMessage, setToastMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
-  }, [groups]);
+    document.body.classList.toggle('dark-theme', isDarkMode);
+    localStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  const refreshData = async (authToken, userId) => {
+    const [groupsData, expensesData, networkData, summaryData, balancesData] = await Promise.all([
+      groupsApi.list(authToken),
+      expensesApi.list(authToken),
+      usersApi.network(authToken),
+      analyticsApi.summary(authToken),
+      analyticsApi.balances(authToken),
+    ]);
+
+    setGroups(groupsData.groups || []);
+    setExpenses((expensesData.expenses || []).map((expense) => normalizeExpense(expense, userId)));
+    setFriends(networkData.friends || []);
+    setIncomingRequests(networkData.incomingRequests || []);
+    setOutgoingRequests(networkData.outgoingRequests || []);
+    setSummary(summaryData);
+    setBalances(balancesData);
+  };
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
-  }, [expenses]);
+    const bootstrap = async () => {
+      if (!token) {
+        return;
+      }
 
-  useEffect(() => {
-    setExpenses((prev) => prev.map((expense) => normalizeExpense(expense, groups)));
-  }, [groups]);
+      setIsLoading(true);
+      try {
+        const meData = await authApi.me(token);
+        setCurrentUser(meData.user);
+        await refreshData(token, meData.user.id);
+      } catch {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        setToken('');
+        setCurrentUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    bootstrap();
+  }, [token]);
 
   const personalExpenses = useMemo(() => getPersonalExpenses(expenses), [expenses]);
   const totalSpent = useMemo(
@@ -110,85 +118,124 @@ function App() {
   const expenseCount = personalExpenses.length;
   const historyExpenseCount = expenses.length;
 
-  const addExpense = (expenseData) => {
-    const nextId = Date.now();
-    const normalizedExpense = normalizeExpense(
-      {
-        ...expenseData,
-        id: nextId,
-      },
-      groups,
-    );
+  const onAuthSuccess = async (nextToken, user) => {
+    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    setToken(nextToken);
+    setCurrentUser(user);
+    await refreshData(nextToken, user.id);
+  };
 
-    const nextExpense = {
-      id: nextId,
-      ...normalizedExpense,
-      splitBetween:
-        normalizedExpense.type === EXPENSE_TYPES.GROUP
-          ? normalizeSplitBetween(normalizedExpense.splitBetween, [normalizedExpense.paidBy])
-          : [],
-    };
+  const logout = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    setToken('');
+    setCurrentUser(null);
+    setGroups([]);
+    setExpenses([]);
+    setFriends([]);
+    setIncomingRequests([]);
+    setOutgoingRequests([]);
+    setBalances({ whoOwesYou: [], whoYouOwe: [], byGroup: [] });
+  };
 
-    setExpenses((prev) => [nextExpense, ...prev]);
+  const searchUsers = async (query) => {
+    if (!token) {
+      return [];
+    }
+
+    const data = await usersApi.search(token, query);
+    return data.users || [];
+  };
+
+  const sendFriendRequest = async (toUserId) => {
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await usersApi.sendFriendRequest(token, toUserId);
+    await refreshData(token, currentUser.id);
+    setToastMessage('Friend request sent');
+  };
+
+  const acceptFriendRequest = async (requestId) => {
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await usersApi.acceptFriendRequest(token, requestId);
+    await refreshData(token, currentUser.id);
+    setToastMessage('Friend request accepted');
+  };
+
+  const rejectFriendRequest = async (requestId) => {
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await usersApi.rejectFriendRequest(token, requestId);
+    await refreshData(token, currentUser.id);
+    setToastMessage('Friend request rejected');
+  };
+
+  const addExpense = async (expenseData) => {
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await expensesApi.create(token, expenseData);
+    await refreshData(token, currentUser.id);
     setToastMessage('Expense added successfully');
   };
 
-  const deleteExpense = (id) => {
+  const deleteExpense = async (id) => {
     const shouldDelete = window.confirm('Are you sure you want to delete?');
 
     if (!shouldDelete) {
       return;
     }
 
-    setExpenses((prev) => prev.filter((item) => item.id !== id));
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await expensesApi.remove(token, id);
+    await refreshData(token, currentUser.id);
   };
 
-  const addMemberToGroup = (groupId, memberId) => {
-    setGroups((prev) =>
-      prev.map((group) => {
-        if (group.id !== groupId || group.memberIds.includes(memberId)) {
-          return group;
-        }
+  const addMemberToGroup = async (groupId, memberId) => {
+    if (!token || !currentUser) {
+      return;
+    }
 
-        return {
-          ...group,
-          memberIds: [...group.memberIds, memberId],
-        };
-      }),
-    );
+    await groupsApi.addMember(token, groupId, { memberId });
+    await refreshData(token, currentUser.id);
     setToastMessage('Member added successfully');
   };
 
-  const createGroup = ({ name, friendIds }) => {
+  const createGroup = async ({ name, friendIds }) => {
     const trimmedName = name.trim();
 
     if (!trimmedName) {
       return { ok: false, message: 'Group name is required.' };
     }
 
-    const normalizedName = trimmedName.toLowerCase();
-    const alreadyExists = groups.some((group) => group.name.trim().toLowerCase() === normalizedName);
-
-    if (alreadyExists) {
-      return { ok: false, message: 'A group with this name already exists.' };
-    }
-
     if (!Array.isArray(friendIds) || friendIds.length === 0) {
       return { ok: false, message: 'Select at least one friend.' };
     }
 
-    const idBase = trimmedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    if (!token || !currentUser) {
+      return { ok: false, message: 'Please login again.' };
+    }
 
-    const nextGroup = {
-      id: `group-${idBase || 'custom'}-${Date.now()}`,
-      name: trimmedName,
-      memberIds: [CURRENT_USER.id, ...Array.from(new Set(friendIds))],
-    };
+    try {
+      await groupsApi.create(token, {
+        name: trimmedName,
+        memberIds: friendIds,
+      });
+      await refreshData(token, currentUser.id);
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
 
-    setGroups((prev) => [nextGroup, ...prev]);
     setToastMessage('Group created successfully');
     return { ok: true };
   };
@@ -205,6 +252,33 @@ function App() {
     return () => window.clearTimeout(toastTimeout);
   }, [toastMessage]);
 
+  if (isLoading) {
+    return (
+      <main className="app">
+        <section className="app-shell">
+          <article className="card">
+            <p className="empty-state">Loading...</p>
+          </article>
+        </section>
+      </main>
+    );
+  }
+
+  if (!token || !currentUser) {
+    return (
+      <main className="app">
+        <section className="app-shell app-shell-collapsed">
+          <Routes>
+            <Route path="/" element={<AuthHome />} />
+            <Route path="/login" element={<Login onAuthSuccess={onAuthSuccess} />} />
+            <Route path="/register" element={<Register onAuthSuccess={onAuthSuccess} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app">
       <section className={`app-shell ${isSidebarOpen ? '' : 'app-shell-collapsed'}`}>
@@ -213,7 +287,14 @@ function App() {
             {toastMessage}
           </p>
         ) : null}
-        <Navbar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen((prev) => !prev)} />
+        <Navbar
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen((prev) => !prev)}
+          onLogout={logout}
+          userName={currentUser.name}
+          isDarkMode={isDarkMode}
+          onToggleTheme={() => setIsDarkMode((prev) => !prev)}
+        />
 
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
@@ -224,8 +305,11 @@ function App() {
                 addExpense={addExpense}
                 expenses={expenses}
                 groups={groups}
-                currentUser={CURRENT_USER}
-                friends={DEFAULT_FRIENDS}
+                currentUser={currentUser}
+                friends={friends}
+                searchUsers={searchUsers}
+                sendFriendRequest={sendFriendRequest}
+                balances={balances}
               />
             }
           />
@@ -235,8 +319,8 @@ function App() {
               <Groups
                 groups={groups}
                 expenses={expenses}
-                currentUser={CURRENT_USER}
-                friends={DEFAULT_FRIENDS}
+                currentUser={currentUser}
+                friends={friends}
                 createGroup={createGroup}
               />
             }
@@ -252,8 +336,8 @@ function App() {
                 expenseCount={historyExpenseCount}
                 personalExpenses={personalExpenses}
                 groups={groups}
-                friends={DEFAULT_FRIENDS}
-                currentUser={CURRENT_USER}
+                friends={friends}
+                currentUser={currentUser}
               />
             }
           />
@@ -263,7 +347,8 @@ function App() {
               <GroupDetails
                 expenses={expenses}
                 groups={groups}
-                currentUser={CURRENT_USER}
+                currentUser={currentUser}
+                friends={friends}
                 addMemberToGroup={addMemberToGroup}
               />
             }
@@ -277,6 +362,7 @@ function App() {
                 expenseCount={expenseCount}
                 categoriesUsed={categoriesUsed}
                 latestExpense={latestExpense}
+                analyticsSummary={summary}
               />
             }
           />

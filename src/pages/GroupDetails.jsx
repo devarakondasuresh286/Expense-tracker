@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { CURRENT_USER, DEFAULT_FRIENDS } from '../constants/expenseConstants';
 import CategoryPieChart from '../components/CategoryPieChart';
 import { calculateCurrentUserBalances, getBalanceStatus, getGroupExpenses } from '../utils/finance';
 
-const FRIENDS_BY_ID = [CURRENT_USER, ...DEFAULT_FRIENDS].reduce((accumulator, friend) => {
-  accumulator[friend.id] = friend;
-  return accumulator;
-}, {});
-
-function GroupDetails({ expenses, groups, currentUser, addMemberToGroup }) {
+function GroupDetails({ expenses, groups, currentUser, friends, addMemberToGroup }) {
   const { groupId } = useParams();
   const selectedGroupId = decodeURIComponent(groupId ?? '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const friendsById = useMemo(
+    () =>
+      [currentUser, ...(friends || [])].reduce((accumulator, friend) => {
+        accumulator[friend.id] = friend;
+        return accumulator;
+      }, {}),
+    [currentUser, friends],
+  );
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId);
 
@@ -50,13 +53,13 @@ function GroupDetails({ expenses, groups, currentUser, addMemberToGroup }) {
       const balance = balancesMap[memberId] ?? 0;
       return {
         memberId,
-        name: FRIENDS_BY_ID[memberId]?.name ?? memberId,
+        name: friendsById[memberId]?.name ?? memberId,
         balance,
         status: getBalanceStatus(balance),
       };
     });
 
-  const availableFriends = DEFAULT_FRIENDS.filter((friend) => !selectedGroup.memberIds.includes(friend.id));
+  const availableFriends = (friends || []).filter((friend) => !selectedGroup.memberIds.includes(friend.id));
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredFriends = availableFriends.filter((friend) => friend.name.toLowerCase().includes(normalizedQuery));
 
@@ -87,7 +90,7 @@ function GroupDetails({ expenses, groups, currentUser, addMemberToGroup }) {
             {selectedGroup.memberIds.map((memberId) => (
               <li key={memberId} className="expense-item">
                 <div>
-                  <p className="expense-title">{FRIENDS_BY_ID[memberId]?.name ?? memberId}</p>
+                  <p className="expense-title">{friendsById[memberId]?.name ?? memberId}</p>
                   <p className="expense-meta">{memberId === currentUser.id ? 'Current user' : 'Member'}</p>
                 </div>
               </li>
@@ -124,7 +127,7 @@ function GroupDetails({ expenses, groups, currentUser, addMemberToGroup }) {
                 <li key={expense.id} className="expense-item" style={{ '--item-index': index % 8 }}>
                   <div>
                     <p className="expense-title">{expense.title}</p>
-                    <p className="expense-meta">Paid by {FRIENDS_BY_ID[expense.paidBy]?.name ?? expense.paidBy}</p>
+                    <p className="expense-meta">Paid by {friendsById[expense.paidBy]?.name ?? expense.paidBy}</p>
                   </div>
                   <span className="expense-amount">${Number(expense.amount).toFixed(2)}</span>
                 </li>
