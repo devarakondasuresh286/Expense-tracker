@@ -2,11 +2,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { createHttpError } from '../utils/httpError.js';
+import { normalizeAvatarDataUrl } from '../utils/avatar.js';
 
 const toUserPayload = (user) => ({
   id: user._id,
   name: user.name,
   email: user.email,
+  avatarDataUrl: user.avatarDataUrl || '',
 });
 
 const signToken = (userId) =>
@@ -14,7 +16,7 @@ const signToken = (userId) =>
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 
-export const register = async ({ name, email, password }) => {
+export const register = async ({ name, email, password, avatarDataUrl }) => {
   const normalizedEmail = String(email).trim().toLowerCase();
   const existing = await User.findOne({ email: normalizedEmail });
 
@@ -23,10 +25,15 @@ export const register = async ({ name, email, password }) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const normalizedAvatarDataUrl = normalizeAvatarDataUrl(avatarDataUrl, {
+    fieldName: 'profile picture',
+  });
+
   const user = await User.create({
     name: name.trim(),
     email: normalizedEmail,
     passwordHash,
+    avatarDataUrl: normalizedAvatarDataUrl,
     friends: [],
   });
 

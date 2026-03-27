@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EXPENSE_CATEGORIES, EXPENSE_TYPES } from '../constants/expenseConstants';
 import { normalizeSplitBetween, todayDateString } from '../utils/finance';
 
@@ -9,7 +9,7 @@ const createDefaultForm = (mode, defaultGroupId, defaultPaidBy) => ({
   notes: '',
   groupId: mode === EXPENSE_TYPES.GROUP ? defaultGroupId ?? '' : '',
   paidBy: mode === EXPENSE_TYPES.GROUP ? defaultPaidBy ?? '' : '',
-  splitBetween: mode === EXPENSE_TYPES.GROUP && defaultPaidBy ? [defaultPaidBy] : [],
+  splitBetween: mode === EXPENSE_TYPES.GROUP ? [] : [],
   date: todayDateString(),
 });
 
@@ -58,6 +58,23 @@ function ExpenseForm({
 
     return selectedGroup.memberIds.map((memberId) => membersById[memberId]).filter(Boolean);
   }, [mode, selectedGroup, membersById]);
+
+  useEffect(() => {
+    if (mode !== EXPENSE_TYPES.GROUP || editingExpense || availableMembers.length === 0) {
+      return;
+    }
+
+    setForm((prev) => {
+      if (prev.splitBetween.length > 0) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        splitBetween: availableMembers.map((member) => member.id),
+      };
+    });
+  }, [mode, editingExpense, availableMembers]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;

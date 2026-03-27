@@ -1,13 +1,23 @@
 import { NavLink } from 'react-router-dom';
 
-const navItems = [
+const authenticatedNavItems = [
+  { icon: '🏠', label: 'Home', path: '/home' },
+  { icon: '👥', label: 'Groups', path: '/groups' },
+  { icon: '📜', label: 'History', path: '/history' },
+  { icon: '📊', label: 'Dashboard', path: '/dashboard' },
+  { icon: '👤', label: 'Profile', path: '/profile' },
+];
+
+const guestNavItems = [
   { icon: '🏠', label: 'Home', path: '/home' },
   { icon: '👥', label: 'Groups', path: '/groups' },
   { icon: '📜', label: 'History', path: '/history' },
   { icon: '📊', label: 'Dashboard', path: '/dashboard' },
 ];
 
-function Navbar({ isOpen, onToggle, onLogout, userName, isDarkMode, onToggleTheme }) {
+function Navbar({ isOpen, onToggle, onLogout, userName, isDarkMode, onToggleTheme, isAuthenticated = true }) {
+  const navItems = isAuthenticated ? authenticatedNavItems : guestNavItems;
+
   const renderNavLink = (item) => (
     <NavLink
       key={item.path}
@@ -29,7 +39,7 @@ function Navbar({ isOpen, onToggle, onLogout, userName, isDarkMode, onToggleThem
         ☰
       </button>
       {isOpen ? <h1 className="title">Expense Tracker</h1> : null}
-      {isOpen ? <p className="expense-meta">{userName}</p> : null}
+      {isOpen && isAuthenticated ? <p className="expense-meta">{userName}</p> : null}
       <nav className="navbar navbar-sidebar" aria-label="Primary navigation">
         {navItems.map(renderNavLink)}
       </nav>
@@ -38,7 +48,7 @@ function Navbar({ isOpen, onToggle, onLogout, userName, isDarkMode, onToggleThem
           {isDarkMode ? 'Light Mode' : 'Dark Mode'}
         </button>
       ) : null}
-      {isOpen ? (
+      {isOpen && isAuthenticated ? (
         <button className="btn secondary-btn" type="button" onClick={onLogout}>
           Logout
         </button>

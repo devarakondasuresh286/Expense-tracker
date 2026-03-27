@@ -2,6 +2,7 @@ import {
   validateAddFriendInput,
   validateFriendRequestActionInput,
   validateFriendRequestInput,
+  validateUpdateProfileInput,
 } from '../validations/userValidation.js';
 import * as userService from '../services/userService.js';
 
@@ -72,4 +73,23 @@ export const rejectFriendRequest = async (req, res) => {
   });
 
   return res.json({ message: 'Friend request rejected.' });
+};
+
+export const updateProfile = async (req, res) => {
+  validateUpdateProfileInput(req.body || {});
+
+  const user = await userService.updateProfile({
+    currentUserId: req.user._id,
+    payload: req.body,
+  });
+
+  return res.json({ user });
+};
+
+export const seedExampleFriends = async (req, res) => {
+  const result = await userService.seedExampleFriends({
+    currentUserId: req.user._id,
+  });
+
+  return res.status(201).json(result);
 };

@@ -4,12 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-fullstack.mjs",
+    "dev:client": "vite",
     "dev:fullstack": "node scripts/dev-fullstack.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "vite",
+    "start": "node scripts/dev-fullstack.mjs",
+    "start:client": "vite",
     "server": "npm --prefix backend run dev",
     "server:start": "npm --prefix backend start"
   },

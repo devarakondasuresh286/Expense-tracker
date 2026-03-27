@@ -43,7 +43,9 @@ export const authApi = {
 export const usersApi = {
   list: (token) => request('/users', { token }),
   network: (token) => request('/users/friends/network', { token }),
+  seedExampleFriends: (token) => request('/users/friends/example-seed', { method: 'POST', token }),
   search: (token, query) => request(`/users/search?q=${encodeURIComponent(query)}`, { token }),
+  updateProfile: (token, payload) => request('/users/profile', { method: 'PATCH', token, body: payload }),
   sendFriendRequest: (token, toUserId) =>
     request('/users/friend-requests', { method: 'POST', token, body: { toUserId } }),
   acceptFriendRequest: (token, requestId) =>
@@ -68,4 +70,9 @@ export const expensesApi = {
 export const analyticsApi = {
   summary: (token) => request('/analytics/summary', { token }),
   balances: (token) => request('/analytics/balances', { token }),
+};
+
+export const notificationsApi = {
+  list: (token) => request('/notifications', { token }),
+  markAllRead: (token) => request('/notifications/read-all', { method: 'POST', token }),
 };

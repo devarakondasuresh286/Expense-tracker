@@ -18,6 +18,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    avatarDataUrl: {
+      type: String,
+      default: '',
+    },
+    notificationsReadAt: {
+      type: Date,
+      default: null,
+    },
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,

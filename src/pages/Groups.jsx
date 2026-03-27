@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateCurrentUserBalances, calculateGroupTotal } from '../utils/finance';
 
-function Groups({ groups, expenses, currentUser, friends, createGroup }) {
+function Groups({ groups, expenses, currentUser, friends, createGroup, isAuthenticated = true, onRequireLogin }) {
   const navigate = useNavigate();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -63,9 +63,22 @@ function Groups({ groups, expenses, currentUser, friends, createGroup }) {
       <article className="card groups-card">
         <div className="groups-header-row">
           <h2 className="section-title">Groups</h2>
-          <button className="btn" type="button" onClick={() => setIsCreateOpen((prev) => !prev)}>
-            {isCreateOpen ? 'Close' : 'Create Group'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                if (!isAuthenticated) {
+                  onRequireLogin?.('Please login to create a group.');
+                  return;
+                }
+
+                setIsCreateOpen((prev) => !prev);
+              }}
+            >
+              {isCreateOpen ? 'Close' : 'Create Group'}
+            </button>
+          </div>
         </div>
         <p className="expense-meta">Select a group to open details, balances, and members.</p>
 

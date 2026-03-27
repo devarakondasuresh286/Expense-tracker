@@ -8,7 +8,9 @@ import {
 	listUsers,
 	rejectFriendRequest,
 	searchUsers,
+	seedExampleFriends,
 	sendFriendRequest,
+	updateProfile,
 } from '../controllers/userController.js';
 
 const router = Router();
@@ -20,5 +22,7 @@ router.get('/search', requireAuth, asyncHandler(searchUsers));
 router.post('/friend-requests', requireAuth, asyncHandler(sendFriendRequest));
 router.post('/friend-requests/:requestId/accept', requireAuth, asyncHandler(acceptFriendRequest));
 router.post('/friend-requests/:requestId/reject', requireAuth, asyncHandler(rejectFriendRequest));
+router.post('/friends/example-seed', requireAuth, asyncHandler(seedExampleFriends));
+router.patch('/profile', requireAuth, asyncHandler(updateProfile));
 
 export default router;

@@ -6,6 +6,7 @@ import userRoutes from './routes/userRoutes.js';
 import groupRoutes from './routes/groupRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -16,7 +17,7 @@ app.use(
     credentials: false,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '3mb' }));
 app.use(morgan('dev'));
 
 app.get('/api/health', (_req, res) => {
@@ -28,6 +29,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

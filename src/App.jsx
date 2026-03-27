@@ -1,15 +1,16 @@
 import './App.css';
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Groups from './pages/Groups';
 import History from './pages/History';
 import Dashboard from './pages/Dashboard';
 import GroupDetails from './pages/GroupDetails';
+import Profile from './pages/Profile';
+import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import AuthHome from './pages/AuthHome';
 import {
   DEFAULT_FILTER_CATEGORY,
   EXPENSE_TYPES,
@@ -34,6 +35,7 @@ const normalizeExpense = (expense, currentUserId) => ({
 });
 
 function App() {
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) === 'dark');
   const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || '');
@@ -43,11 +45,21 @@ function App() {
   const [friends, setFriends] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
+  const [hasAttemptedAutoSeedFriends, setHasAttemptedAutoSeedFriends] = useState(false);
   const [balances, setBalances] = useState({ whoOwesYou: [], whoYouOwe: [], byGroup: [] });
   const [summary, setSummary] = useState({ totalMonthlySpending: 0, mostSpentCategory: null, categoryWise: [] });
   const [filterCategory, setFilterCategory] = useState(DEFAULT_FILTER_CATEGORY);
   const [toastMessage, setToastMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const showGuestAuthTopNav = !token && !currentUser && location.pathname === '/home';
+  const guestUser = useMemo(
+    () => ({
+      id: 'guest',
+      name: 'Guest User',
+      email: '',
+    }),
+    [],
+  );
 
   useEffect(() => {
     document.body.classList.toggle('dark-theme', isDarkMode);
@@ -134,7 +146,12 @@ function App() {
     setFriends([]);
     setIncomingRequests([]);
     setOutgoingRequests([]);
+    setHasAttemptedAutoSeedFriends(false);
     setBalances({ whoOwesYou: [], whoYouOwe: [], byGroup: [] });
+  };
+
+  const requireLogin = (message = 'Please login to continue.') => {
+    setToastMessage(message);
   };
 
   const searchUsers = async (query) => {
@@ -174,6 +191,16 @@ function App() {
     await usersApi.rejectFriendRequest(token, requestId);
     await refreshData(token, currentUser.id);
     setToastMessage('Friend request rejected');
+  };
+
+  const updateProfile = async (payload) => {
+    if (!token) {
+      return;
+    }
+
+    const data = await usersApi.updateProfile(token, payload);
+    setCurrentUser(data.user);
+    setToastMessage('Profile updated');
   };
 
   const addExpense = async (expenseData) => {
@@ -240,6 +267,21 @@ function App() {
     return { ok: true };
   };
 
+  const seedExampleFriends = async () => {
+    if (!token || !currentUser) {
+      return { ok: false, message: 'Please login again.' };
+    }
+
+    try {
+      const result = await usersApi.seedExampleFriends(token);
+      await refreshData(token, currentUser.id);
+      setToastMessage(`Added ${result.addedCount || 0} example friends`);
+      return { ok: true, count: result.addedCount || 0 };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
+  };
+
   useEffect(() => {
     if (!toastMessage) {
       return;
@@ -251,6 +293,31 @@ function App() {
 
     return () => window.clearTimeout(toastTimeout);
   }, [toastMessage]);
+
+  useEffect(() => {
+    const autoSeedFriends = async () => {
+      if (!token || !currentUser || hasAttemptedAutoSeedFriends) {
+        return;
+      }
+
+      if ((friends || []).length > 0) {
+        setHasAttemptedAutoSeedFriends(true);
+        return;
+      }
+
+      setHasAttemptedAutoSeedFriends(true);
+
+      try {
+        await usersApi.seedExampleFriends(token);
+        await refreshData(token, currentUser.id);
+        setToastMessage('Example friends added');
+      } catch {
+        // Keep silent if seeding fails; users can still add friends manually.
+      }
+    };
+
+    autoSeedFriends();
+  }, [token, currentUser, friends, hasAttemptedAutoSeedFriends]);
 
   if (isLoading) {
     return (
@@ -267,12 +334,104 @@ function App() {
   if (!token || !currentUser) {
     return (
       <main className="app">
-        <section className="app-shell app-shell-collapsed">
+        <section className={`app-shell ${isSidebarOpen ? '' : 'app-shell-collapsed'}`}>
+          {toastMessage ? (
+            <p className="toast-message toast-success" role="status" aria-live="polite">
+              {toastMessage}
+            </p>
+          ) : null}
+
+          <Navbar
+            isOpen={isSidebarOpen}
+            onToggle={() => setIsSidebarOpen((prev) => !prev)}
+            userName="Guest"
+            isDarkMode={isDarkMode}
+            onToggleTheme={() => setIsDarkMode((prev) => !prev)}
+            isAuthenticated={false}
+          />
+
+          {showGuestAuthTopNav ? (
+            <div className="auth-top-nav" aria-label="Authentication actions">
+              <Link className="btn secondary-btn" to="/login">
+                Login
+              </Link>
+              <Link className="btn" to="/register">
+                Register
+              </Link>
+            </div>
+          ) : null}
+
           <Routes>
-            <Route path="/" element={<AuthHome />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route
+              path="/home"
+              element={
+                <Home
+                  addExpense={() => requireLogin('Please login to add expense.')}
+                  expenses={[]}
+                  groups={[]}
+                  currentUser={guestUser}
+                  friends={[]}
+                  searchUsers={async () => {
+                    requireLogin('Please login to search users.');
+                    return [];
+                  }}
+                  sendFriendRequest={async () => requireLogin('Please login to send friend requests.')}
+                  balances={{ whoOwesYou: [], whoYouOwe: [], byGroup: [] }}
+                  isAuthenticated={false}
+                  onRequireLogin={requireLogin}
+                />
+              }
+            />
             <Route path="/login" element={<Login onAuthSuccess={onAuthSuccess} />} />
             <Route path="/register" element={<Register onAuthSuccess={onAuthSuccess} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route
+              path="/groups"
+              element={
+                <Groups
+                  groups={[]}
+                  expenses={[]}
+                  currentUser={guestUser}
+                  friends={[]}
+                  createGroup={async () => ({ ok: false, message: 'Please login to create a group.' })}
+                  isAuthenticated={false}
+                  onRequireLogin={requireLogin}
+                />
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <History
+                  deleteExpense={() => requireLogin('Please login to delete expenses.')}
+                  filterCategory={filterCategory}
+                  setFilterCategory={setFilterCategory}
+                  filteredExpenses={[]}
+                  expenseCount={0}
+                  personalExpenses={[]}
+                  groups={[]}
+                  friends={[]}
+                  currentUser={guestUser}
+                />
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <Dashboard
+                  expenses={[]}
+                  totalSpent={0}
+                  expenseCount={0}
+                  categoriesUsed={0}
+                  latestExpense={null}
+                  analyticsSummary={{ totalMonthlySpending: 0, mostSpentCategory: null, categoryWise: [] }}
+                />
+              }
+            />
+            <Route path="/profile" element={<Navigate to="/login" replace />} />
+            <Route path="/notifications" element={<Navigate to="/login" replace />} />
+            <Route path="/groups/:groupId" element={<Navigate to="/groups" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </section>
       </main>
@@ -298,6 +457,8 @@ function App() {
 
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/login" element={<Navigate to="/profile" replace />} />
+          <Route path="/register" element={<Navigate to="/profile" replace />} />
           <Route
             path="/home"
             element={
@@ -366,6 +527,17 @@ function App() {
               />
             }
           />
+          <Route
+            path="/profile"
+            element={
+              <Profile
+                currentUser={currentUser}
+                onLogout={logout}
+                onUpdateProfile={updateProfile}
+              />
+            }
+          />
+          <Route path="/notifications" element={<Notifications token={token} />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </section>

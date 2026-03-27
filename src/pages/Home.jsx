@@ -12,6 +12,8 @@ function Home({
   searchUsers,
   sendFriendRequest,
   balances,
+  isAuthenticated = true,
+  onRequireLogin,
 }) {
   const [isExpenseTypeModalOpen, setIsExpenseTypeModalOpen] = useState(false);
   const [selectedExpenseType, setSelectedExpenseType] = useState(null);
@@ -42,6 +44,20 @@ function Home({
   }, [groups, currentUser, friends]);
 
   const allFriends = useMemo(() => friends.map((friend) => ({ id: friend.id, name: friend.name })), [friends]);
+
+  const friendBalanceMap = useMemo(() => {
+    const map = {};
+
+    (balances?.whoOwesYou || []).forEach((entry) => {
+      map[entry.userId] = { type: 'owes-you', amount: Number(entry.amount) };
+    });
+
+    (balances?.whoYouOwe || []).forEach((entry) => {
+      map[entry.userId] = { type: 'you-owe', amount: Number(entry.amount) };
+    });
+
+    return map;
+  }, [balances]);
 
   const totalExpense = useMemo(
     () => expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0),
@@ -74,6 +90,11 @@ function Home({
   };
 
   const handleSearchUsers = async () => {
+    if (!isAuthenticated) {
+      onRequireLogin?.('Please login to search users.');
+      return;
+    }
+
     const query = searchQuery.trim();
     if (!query) {
       setSearchResults([]);
@@ -94,6 +115,11 @@ function Home({
   };
 
   const handleSendRequest = async (userId) => {
+    if (!isAuthenticated) {
+      onRequireLogin?.('Please login to send friend requests.');
+      return;
+    }
+
     try {
       await sendFriendRequest(userId);
       setSearchResults((prev) => prev.filter((item) => item.id !== userId));
@@ -130,13 +156,31 @@ function Home({
           <ul className="home-name-list">
             {allFriends.map((friend) => (
               <li key={friend.id} className="home-name-item">
-                {friend.name}
+                <p className="expense-title">{friend.name}</p>
+                <p className="expense-meta">
+                  {friendBalanceMap[friend.id]?.type === 'owes-you'
+                    ? `${friend.name} owes you $${friendBalanceMap[friend.id].amount.toFixed(2)}`
+                    : friendBalanceMap[friend.id]?.type === 'you-owe'
+                      ? `You owe ${friend.name} $${friendBalanceMap[friend.id].amount.toFixed(2)}`
+                      : 'Settled up'}
+                </p>
               </li>
             ))}
           </ul>
         )}
 
-        <button className="btn secondary-btn home-add-friend-btn" type="button" onClick={() => navigate('/groups')}>
+        <button
+          className="btn secondary-btn home-add-friend-btn"
+          type="button"
+          onClick={() => {
+            if (!isAuthenticated) {
+              onRequireLogin?.('Please login to manage friends and groups.');
+              return;
+            }
+
+            navigate('/groups');
+          }}
+        >
           + Add Friends
         </button>
       </article>
@@ -176,36 +220,19 @@ function Home({
         {friendActionMessage ? <p className="form-message success">{friendActionMessage}</p> : null}
       </article>
 
-      <article className="card home-simple-section" aria-label="Balance summary">
-        <h3 className="section-title">Who Owes You</h3>
-        {balances?.whoOwesYou?.length ? (
-          <ul className="home-name-list">
-            {balances.whoOwesYou.map((entry) => (
-              <li key={entry.userId} className="home-name-item">
-                {entry.name} - ${Number(entry.amount).toFixed(2)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="home-empty-copy">No one owes you right now.</p>
-        )}
-
-        <h3 className="section-title">Who You Owe</h3>
-        {balances?.whoYouOwe?.length ? (
-          <ul className="home-name-list">
-            {balances.whoYouOwe.map((entry) => (
-              <li key={entry.userId} className="home-name-item">
-                {entry.name} - ${Number(entry.amount).toFixed(2)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="home-empty-copy">You are all settled up.</p>
-        )}
-      </article>
-
       <div className="home-centered-actions" aria-label="Main actions">
-        <button className="btn home-big-action-btn" type="button" onClick={() => setIsExpenseTypeModalOpen(true)}>
+        <button
+          className="btn home-big-action-btn"
+          type="button"
+          onClick={() => {
+            if (!isAuthenticated) {
+              onRequireLogin?.('Please login to add expenses.');
+              return;
+            }
+
+            setIsExpenseTypeModalOpen(true);
+          }}
+        >
           Add Expense
         </button>
       </div>

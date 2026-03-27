@@ -10,7 +10,9 @@ export const computeBalancesForCurrentUser = ({ expenses, currentUserId, groupId
       return;
     }
 
-    const participants = (expense.splitBetween || []).map((id) => String(id));
+    const participants = (expense.splitBetween || []).map((member) =>
+      String(member?._id || member),
+    );
     if (!participants.includes(String(currentUserId)) || participants.length === 0) {
       return;
     }

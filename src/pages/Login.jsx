@@ -17,7 +17,7 @@ function Login({ onAuthSuccess }) {
     try {
       const data = await authApi.login({ email, password });
       onAuthSuccess(data.token, data.user);
-      navigate('/home');
+      navigate('/profile');
     } catch (error) {
       setMessage(error.message);
     } finally {

@@ -67,7 +67,11 @@ export const createExpense = async ({ currentUserId, payload }) => {
 
     validatedSplitBetween = validatedSplitBetween.filter((memberId) => groupMemberIds.has(memberId));
     if (validatedSplitBetween.length === 0) {
-      validatedSplitBetween = [validatedPaidBy];
+      validatedSplitBetween = Array.from(groupMemberIds);
+    }
+
+    if (!validatedSplitBetween.includes(validatedPaidBy)) {
+      validatedSplitBetween.push(validatedPaidBy);
     }
 
     validatedGroupId = group._id;

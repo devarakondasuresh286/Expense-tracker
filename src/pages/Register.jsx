@@ -2,13 +2,38 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
 
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read selected image.'));
+    reader.readAsDataURL(file);
+  });
+
 function Register({ onAuthSuccess }) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [avatarDataUrl, setAvatarDataUrl] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const onAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setAvatarDataUrl('');
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setAvatarDataUrl(dataUrl);
+    } catch (error) {
+      setMessage(error.message);
+      setAvatarDataUrl('');
+    }
+  };
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -16,9 +41,9 @@ function Register({ onAuthSuccess }) {
     setMessage('');
 
     try {
-      const data = await authApi.register({ name, email, password });
+      const data = await authApi.register({ name, email, password, avatarDataUrl });
       onAuthSuccess(data.token, data.user);
-      navigate('/home');
+      navigate('/profile');
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -55,6 +80,21 @@ function Register({ onAuthSuccess }) {
             placeholder="Password (min 6 chars)"
             required
           />
+          <input
+            className="input"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={onAvatarChange}
+          />
+          {avatarDataUrl ? (
+            <img
+              src={avatarDataUrl}
+              alt="Profile preview"
+              style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+            />
+          ) : (
+            <p className="expense-meta">Profile picture is optional</p>
+          )}
           <button className="btn" type="submit" disabled={loading}>
             {loading ? 'Creating account...' : 'Register'}
           </button>

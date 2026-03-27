@@ -25,3 +25,17 @@ export const validateFriendRequestActionInput = ({ requestId }) => {
     throw createHttpError(400, 'requestId is required.');
   }
 };
+
+export const validateUpdateProfileInput = ({ name, avatarDataUrl, removeAvatar }) => {
+  if (name != null && typeof name !== 'string') {
+    throw createHttpError(400, 'name should be a string.');
+  }
+
+  if (avatarDataUrl != null && typeof avatarDataUrl !== 'string') {
+    throw createHttpError(400, 'avatarDataUrl should be a string.');
+  }
+
+  if (removeAvatar != null && typeof removeAvatar !== 'boolean') {
+    throw createHttpError(400, 'removeAvatar should be a boolean.');
+  }
+};
