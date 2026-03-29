@@ -19,8 +19,8 @@ function Profile({ currentUser, onLogout, onUpdateProfile }) {
 
   const options = [
     { icon: '🔔', title: 'Notifications', onClick: () => navigate('/notifications') },
-    { icon: '⭐', title: 'Rate Expense Tracker' },
-    { icon: '📞', title: 'Contact Us' },
+    { icon: '⭐', title: 'Rate Expense Tracker', onClick: () => navigate('/rate-us') },
+    { icon: '📞', title: 'Contact Us', onClick: () => navigate('/contact-us') },
   ];
 
   const onSelectAvatar = async (event) => {

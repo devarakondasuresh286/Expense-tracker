@@ -52,6 +52,25 @@ const expenseSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    splitMode: {
+      type: String,
+      enum: ['equal', 'custom'],
+      default: 'equal',
+    },
+    splitConfig: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+      },
+    ],
   },
   { timestamps: true },
 );

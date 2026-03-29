@@ -28,7 +28,9 @@ const request = async (path, { method = 'GET', token, body } = {}) => {
       (response.status >= 500
         ? 'Backend server error. Check whether the API server is running.'
         : `Request failed (${response.status})`);
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -46,6 +48,8 @@ export const usersApi = {
   seedExampleFriends: (token) => request('/users/friends/example-seed', { method: 'POST', token }),
   search: (token, query) => request(`/users/search?q=${encodeURIComponent(query)}`, { token }),
   updateProfile: (token, payload) => request('/users/profile', { method: 'PATCH', token, body: payload }),
+  addFriend: (token, friendId) =>
+    request('/users/friends', { method: 'POST', token, body: { friendId } }),
   sendFriendRequest: (token, toUserId) =>
     request('/users/friend-requests', { method: 'POST', token, body: { toUserId } }),
   acceptFriendRequest: (token, requestId) =>
@@ -70,6 +74,7 @@ export const expensesApi = {
 export const analyticsApi = {
   summary: (token) => request('/analytics/summary', { token }),
   balances: (token) => request('/analytics/balances', { token }),
+  settleUp: (token, payload) => request('/analytics/settle-up', { method: 'POST', token, body: payload }),
 };
 
 export const notificationsApi = {

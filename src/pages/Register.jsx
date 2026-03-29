@@ -42,8 +42,8 @@ function Register({ onAuthSuccess }) {
 
     try {
       const data = await authApi.register({ name, email, password, avatarDataUrl });
-      onAuthSuccess(data.token, data.user);
-      navigate('/profile');
+      await onAuthSuccess(data.token, data.user);
+      navigate('/home');
     } catch (error) {
       setMessage(error.message);
     } finally {

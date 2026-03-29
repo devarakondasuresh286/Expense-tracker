@@ -3,11 +3,12 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import CategoryPieChart from '../components/CategoryPieChart';
 import { calculateCurrentUserBalances, getBalanceStatus, getGroupExpenses } from '../utils/finance';
 
-function GroupDetails({ expenses, groups, currentUser, friends, addMemberToGroup }) {
+function GroupDetails({ expenses, groups, currentUser, friends, addMemberToGroup, settleUpGroupBalance }) {
   const { groupId } = useParams();
   const selectedGroupId = decodeURIComponent(groupId ?? '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [settleMessage, setSettleMessage] = useState('');
 
   const friendsById = useMemo(
     () =>
@@ -68,6 +69,16 @@ function GroupDetails({ expenses, groups, currentUser, friends, addMemberToGroup
     setSearchQuery('');
   };
 
+  const handleSettleUp = async (memberId) => {
+    const result = await settleUpGroupBalance?.(selectedGroup.id, memberId);
+    if (!result?.ok) {
+      setSettleMessage(result?.message || 'Unable to settle balance.');
+      return;
+    }
+
+    setSettleMessage('Balance settled successfully.');
+  };
+
   return (
     <section className="page-grid" aria-label={`${selectedGroup.name} details`}>
       <div className="group-workspace-header">
@@ -110,13 +121,21 @@ function GroupDetails({ expenses, groups, currentUser, friends, addMemberToGroup
                     <p className="expense-title">{member.name}</p>
                     <p className="expense-meta">{member.status}</p>
                   </div>
-                  <span className={`expense-amount ${member.balance < 0 ? 'home-metric-negative' : 'home-metric-positive'}`}>
-                    ${Math.abs(member.balance).toFixed(2)}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className={`expense-amount ${member.balance < 0 ? 'home-metric-negative' : 'home-metric-positive'}`}>
+                      ${Math.abs(member.balance).toFixed(2)}
+                    </span>
+                    {Math.abs(member.balance) >= 0.01 ? (
+                      <button className="btn secondary-btn" type="button" onClick={() => handleSettleUp(member.memberId)}>
+                        Settle Up
+                      </button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>
           )}
+          {settleMessage ? <p className="form-message success">{settleMessage}</p> : null}
 
           <h3 className="section-title">Recent Expenses</h3>
           {selectedGroupExpenses.length === 0 ? (

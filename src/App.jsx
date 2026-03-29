@@ -11,14 +11,16 @@ import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import RateUs from './pages/RateUs';
+import ContactUs from './pages/ContactUs';
 import {
   DEFAULT_FILTER_CATEGORY,
   EXPENSE_TYPES,
 } from './constants/expenseConstants';
 import { getPersonalExpenses, normalizeSplitBetween } from './utils/finance';
+import { authStorage } from './utils/authStorage';
 import { analyticsApi, authApi, expensesApi, groupsApi, usersApi } from './services/api';
 
-const AUTH_TOKEN_KEY = 'expense_tracker_auth_token';
 const THEME_STORAGE_KEY = 'expense_tracker_theme';
 
 const normalizeExpense = (expense, currentUserId) => ({
@@ -29,6 +31,11 @@ const normalizeExpense = (expense, currentUserId) => ({
   groupId: expense.groupId ?? null,
   paidBy: expense.paidBy ?? currentUserId,
   splitBetween: normalizeSplitBetween(expense.splitBetween, expense.paidBy ? [expense.paidBy] : []),
+  splitMode: expense.splitMode || 'equal',
+  splitConfig: (expense.splitConfig || []).map((item) => ({
+    userId: item.userId,
+    amount: Number(item.amount || 0),
+  })),
   amount: Number(expense.amount ?? 0),
   date: String(expense.date).split('T')[0],
   notes: expense.notes ?? '',
@@ -36,10 +43,12 @@ const normalizeExpense = (expense, currentUserId) => ({
 
 function App() {
   const location = useLocation();
+  const initialToken = authStorage.getToken();
+  const initialUser = authStorage.getUser();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) === 'dark');
-  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || '');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [token, setToken] = useState(initialToken);
+  const [currentUser, setCurrentUser] = useState(initialUser);
   const [groups, setGroups] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -50,7 +59,7 @@ function App() {
   const [summary, setSummary] = useState({ totalMonthlySpending: 0, mostSpentCategory: null, categoryWise: [] });
   const [filterCategory, setFilterCategory] = useState(DEFAULT_FILTER_CATEGORY);
   const [toastMessage, setToastMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(Boolean(initialToken));
   const showGuestAuthTopNav = !token && !currentUser && location.pathname === '/home';
   const guestUser = useMemo(
     () => ({
@@ -87,6 +96,7 @@ function App() {
   useEffect(() => {
     const bootstrap = async () => {
       if (!token) {
+        setIsLoading(false);
         return;
       }
 
@@ -94,11 +104,17 @@ function App() {
       try {
         const meData = await authApi.me(token);
         setCurrentUser(meData.user);
+        authStorage.setUser(meData.user);
         await refreshData(token, meData.user.id);
-      } catch {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        setToken('');
-        setCurrentUser(null);
+      } catch (error) {
+        if (error?.status === 401 || error?.status === 403) {
+          authStorage.clearSession();
+          setToken('');
+          setCurrentUser(null);
+          return;
+        }
+
+        setToastMessage('Backend restarting. Keeping your current session.');
       } finally {
         setIsLoading(false);
       }
@@ -111,6 +127,11 @@ function App() {
   const totalSpent = useMemo(
     () => personalExpenses.reduce((sum, item) => sum + Number(item.amount), 0),
     [personalExpenses],
+  );
+
+  const dashboardTotalSpent = useMemo(
+    () => expenses.reduce((sum, item) => sum + Number(item.amount), 0),
+    [expenses],
   );
 
   const filteredExpenses = useMemo(() => {
@@ -126,19 +147,26 @@ function App() {
     [personalExpenses],
   );
 
+  const dashboardCategoriesUsed = useMemo(
+    () => new Set(expenses.map((item) => item.category)).size,
+    [expenses],
+  );
+
   const latestExpense = personalExpenses[0] ?? null;
   const expenseCount = personalExpenses.length;
+  const dashboardLatestExpense = expenses[0] ?? null;
+  const dashboardExpenseCount = expenses.length;
   const historyExpenseCount = expenses.length;
 
   const onAuthSuccess = async (nextToken, user) => {
-    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    authStorage.setSession(nextToken, user);
     setToken(nextToken);
     setCurrentUser(user);
     await refreshData(nextToken, user.id);
   };
 
   const logout = () => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    authStorage.clearSession();
     setToken('');
     setCurrentUser(null);
     setGroups([]);
@@ -173,6 +201,16 @@ function App() {
     setToastMessage('Friend request sent');
   };
 
+  const addFriend = async (friendId) => {
+    if (!token || !currentUser) {
+      return;
+    }
+
+    await usersApi.addFriend(token, friendId);
+    await refreshData(token, currentUser.id);
+    setToastMessage('Friend added successfully');
+  };
+
   const acceptFriendRequest = async (requestId) => {
     if (!token || !currentUser) {
       return;
@@ -200,6 +238,7 @@ function App() {
 
     const data = await usersApi.updateProfile(token, payload);
     setCurrentUser(data.user);
+    authStorage.setUser(data.user);
     setToastMessage('Profile updated');
   };
 
@@ -236,6 +275,21 @@ function App() {
     await groupsApi.addMember(token, groupId, { memberId });
     await refreshData(token, currentUser.id);
     setToastMessage('Member added successfully');
+  };
+
+  const settleUpGroupBalance = async (groupId, userId) => {
+    if (!token || !currentUser) {
+      return { ok: false, message: 'Please login again.' };
+    }
+
+    try {
+      const result = await analyticsApi.settleUp(token, { groupId, userId });
+      await refreshData(token, currentUser.id);
+      setToastMessage(result.message || 'Balance settled successfully');
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error.message };
+    }
   };
 
   const createGroup = async ({ name, friendIds }) => {
@@ -376,7 +430,7 @@ function App() {
                     requireLogin('Please login to search users.');
                     return [];
                   }}
-                  sendFriendRequest={async () => requireLogin('Please login to send friend requests.')}
+                  addFriend={async () => requireLogin('Please login to add friends.')}
                   balances={{ whoOwesYou: [], whoYouOwe: [], byGroup: [] }}
                   isAuthenticated={false}
                   onRequireLogin={requireLogin}
@@ -430,6 +484,8 @@ function App() {
             />
             <Route path="/profile" element={<Navigate to="/login" replace />} />
             <Route path="/notifications" element={<Navigate to="/login" replace />} />
+            <Route path="/rate-us" element={<Navigate to="/login" replace />} />
+            <Route path="/contact-us" element={<Navigate to="/login" replace />} />
             <Route path="/groups/:groupId" element={<Navigate to="/groups" replace />} />
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
@@ -469,7 +525,7 @@ function App() {
                 currentUser={currentUser}
                 friends={friends}
                 searchUsers={searchUsers}
-                sendFriendRequest={sendFriendRequest}
+                addFriend={addFriend}
                 balances={balances}
               />
             }
@@ -511,6 +567,7 @@ function App() {
                 currentUser={currentUser}
                 friends={friends}
                 addMemberToGroup={addMemberToGroup}
+                settleUpGroupBalance={settleUpGroupBalance}
               />
             }
           />
@@ -518,11 +575,11 @@ function App() {
             path="/dashboard"
             element={
               <Dashboard
-                expenses={personalExpenses}
-                totalSpent={totalSpent}
-                expenseCount={expenseCount}
-                categoriesUsed={categoriesUsed}
-                latestExpense={latestExpense}
+                expenses={expenses}
+                totalSpent={dashboardTotalSpent}
+                expenseCount={dashboardExpenseCount}
+                categoriesUsed={dashboardCategoriesUsed}
+                latestExpense={dashboardLatestExpense}
                 analyticsSummary={summary}
               />
             }
@@ -538,6 +595,8 @@ function App() {
             }
           />
           <Route path="/notifications" element={<Notifications token={token} />} />
+          <Route path="/rate-us" element={<RateUs />} />
+          <Route path="/contact-us" element={<ContactUs />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </section>

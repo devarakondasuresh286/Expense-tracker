@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ExpenseForm from '../components/ExpenseForm';
 import { EXPENSE_TYPES } from '../constants/expenseConstants';
 
@@ -10,7 +9,7 @@ function Home({
   currentUser,
   friends,
   searchUsers,
-  sendFriendRequest,
+  addFriend,
   balances,
   isAuthenticated = true,
   onRequireLogin,
@@ -20,8 +19,28 @@ function Home({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isFindFriendsOpen, setIsFindFriendsOpen] = useState(false);
   const [friendActionMessage, setFriendActionMessage] = useState('');
-  const navigate = useNavigate();
+  const expenseFormSectionRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedExpenseType || !expenseFormSectionRef.current) {
+      return;
+    }
+
+    const formSection = expenseFormSectionRef.current;
+
+    // Move new users directly to the newly opened form section.
+    formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const focusTimer = window.setTimeout(() => {
+      const firstField = formSection.querySelector('input[name="title"]')
+        || formSection.querySelector('input, select, textarea, button');
+      firstField?.focus();
+    }, 220);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [selectedExpenseType]);
 
   const membersById = useMemo(() => {
     const map = {
@@ -114,19 +133,35 @@ function Home({
     }
   };
 
-  const handleSendRequest = async (userId) => {
+  const handleAddFriend = async (userId) => {
     if (!isAuthenticated) {
-      onRequireLogin?.('Please login to send friend requests.');
+      onRequireLogin?.('Please login to add friends.');
       return;
     }
 
     try {
-      await sendFriendRequest(userId);
+      await addFriend(userId);
       setSearchResults((prev) => prev.filter((item) => item.id !== userId));
-      setFriendActionMessage('Friend request sent.');
+      setFriendActionMessage('Friend added successfully!');
     } catch (error) {
       setFriendActionMessage(error.message);
     }
+  };
+
+  const openFindFriends = () => {
+    if (!isAuthenticated) {
+      onRequireLogin?.('Please login to manage friends and groups.');
+      return;
+    }
+
+    setIsFindFriendsOpen(true);
+  };
+
+  const closeFindFriends = () => {
+    setIsFindFriendsOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setFriendActionMessage('');
   };
 
   return (
@@ -172,53 +207,58 @@ function Home({
         <button
           className="btn secondary-btn home-add-friend-btn"
           type="button"
-          onClick={() => {
-            if (!isAuthenticated) {
-              onRequireLogin?.('Please login to manage friends and groups.');
-              return;
-            }
-
-            navigate('/groups');
-          }}
+          onClick={openFindFriends}
         >
           + Add Friends
         </button>
       </article>
 
-      <article className="card home-simple-section" aria-label="Find friends">
-        <h3 className="section-title">Find Friends</h3>
-        <div className="history-toolbar">
-          <input
-            className="input"
-            type="text"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search users by name or email"
-            aria-label="Search users"
-          />
-          <button className="btn" type="button" onClick={handleSearchUsers} disabled={isSearching}>
-            {isSearching ? 'Searching...' : 'Search'}
-          </button>
-        </div>
-        {searchResults.length === 0 ? (
-          <p className="home-empty-copy">Search to discover users you can add.</p>
-        ) : (
-          <ul className="expense-list">
-            {searchResults.map((user) => (
-              <li key={user.id} className="expense-item">
-                <div>
-                  <p className="expense-title">{user.name}</p>
-                  <p className="expense-meta">{user.email}</p>
-                </div>
-                <button className="btn" type="button" onClick={() => handleSendRequest(user.id)}>
-                  Send Request
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {friendActionMessage ? <p className="form-message success">{friendActionMessage}</p> : null}
-      </article>
+      {isFindFriendsOpen ? (
+        <article className="card home-simple-section" aria-label="Find friends">
+          <div className="home-form-close-row">
+            <button
+              className="btn secondary-btn home-form-close-btn"
+              type="button"
+              onClick={closeFindFriends}
+              aria-label="Close find friends"
+            >
+              ×
+            </button>
+          </div>
+          <h3 className="section-title">Find Friends</h3>
+          <div className="history-toolbar">
+            <input
+              className="input"
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search users by name or email"
+              aria-label="Search users"
+            />
+            <button className="btn" type="button" onClick={handleSearchUsers} disabled={isSearching}>
+              {isSearching ? 'Searching...' : 'Search'}
+            </button>
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="home-empty-copy">Search to discover users you can add.</p>
+          ) : (
+            <ul className="expense-list">
+              {searchResults.map((user) => (
+                <li key={user.id} className="expense-item">
+                  <div>
+                    <p className="expense-title">{user.name}</p>
+                    <p className="expense-meta">{user.email}</p>
+                  </div>
+                  <button className="btn primary-btn" type="button" onClick={() => handleAddFriend(user.id)}>
+                    Add Friend
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {friendActionMessage ? <p className="form-message success">{friendActionMessage}</p> : null}
+        </article>
+      ) : null}
 
       <div className="home-centered-actions" aria-label="Main actions">
         <button
@@ -252,7 +292,7 @@ function Home({
       ) : null}
 
       {selectedExpenseType ? (
-        <article className="card home-simple-section" aria-label="Add expense form">
+        <article ref={expenseFormSectionRef} className="card home-simple-section" aria-label="Add expense form">
           <div className="home-form-close-row">
             <button
               className="btn secondary-btn home-form-close-btn"

@@ -39,8 +39,44 @@ export const calculateGroupTotal = (expenses, groupId) =>
 export const calculateCurrentUserBalances = ({ expenses, groupId, currentUserId }) => {
   const balances = {};
 
+  const applyBalanceDelta = (memberId, amount) => {
+    if (!memberId || !Number.isFinite(Number(amount)) || Math.abs(Number(amount)) < 0.00001) {
+      return;
+    }
+
+    balances[memberId] = (balances[memberId] ?? 0) + Number(amount);
+  };
+
   getGroupExpenses(expenses, groupId).forEach((expense) => {
     const paidBy = expense.paidBy;
+    const splitMode = expense.splitMode || 'equal';
+
+    if (splitMode === 'custom') {
+      const customRows = (expense.splitConfig || []).map((row) => ({
+        userId: row.userId,
+        amount: Number(row.amount || 0),
+      }));
+
+      const participantIds = customRows.filter((row) => row.amount > 0).map((row) => row.userId);
+      if (!paidBy || (paidBy !== currentUserId && !participantIds.includes(currentUserId))) {
+        return;
+      }
+
+      if (paidBy === currentUserId) {
+        customRows.forEach((row) => {
+          if (row.userId === currentUserId) {
+            return;
+          }
+
+          applyBalanceDelta(row.userId, row.amount);
+        });
+      } else {
+        const currentShare = customRows.find((row) => row.userId === currentUserId)?.amount || 0;
+        applyBalanceDelta(paidBy, -currentShare);
+      }
+      return;
+    }
+
     const participants = normalizeSplitBetween(expense.splitBetween, paidBy ? [paidBy] : []);
 
     if (!paidBy || participants.length === 0 || !participants.includes(currentUserId)) {
@@ -55,12 +91,12 @@ export const calculateCurrentUserBalances = ({ expenses, groupId, currentUserId 
           return;
         }
 
-        balances[participantId] = (balances[participantId] ?? 0) + share;
+        applyBalanceDelta(participantId, share);
       });
       return;
     }
 
-    balances[paidBy] = (balances[paidBy] ?? 0) - share;
+    applyBalanceDelta(paidBy, -share);
   });
 
   return Object.entries(balances).reduce((accumulator, [memberId, balance]) => {

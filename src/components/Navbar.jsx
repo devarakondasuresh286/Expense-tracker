@@ -3,7 +3,8 @@ import { NavLink } from 'react-router-dom';
 const authenticatedNavItems = [
   { icon: '🏠', label: 'Home', path: '/home' },
   { icon: '👥', label: 'Groups', path: '/groups' },
-  { icon: '📜', label: 'History', path: '/history' },
+
+  { icon: '�📜', label: 'History', path: '/history' },
   { icon: '📊', label: 'Dashboard', path: '/dashboard' },
   { icon: '👤', label: 'Profile', path: '/profile' },
 ];

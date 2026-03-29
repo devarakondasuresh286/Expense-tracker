@@ -17,19 +17,52 @@ export const listUsers = async (currentUserId) => {
 };
 
 export const addFriend = async ({ currentUserId, friendId }) => {
-  const friend = await User.findById(friendId).select('_id');
+  const [currentUser, friend] = await Promise.all([
+    User.findById(currentUserId).select('_id friends'),
+    User.findById(friendId).select('_id'),
+  ]);
+
+  if (!currentUser) {
+    throw createHttpError(404, 'User not found.');
+  }
+
   if (!friend) {
     throw createHttpError(404, 'Friend not found.');
   }
 
-  await User.updateOne(
-    { _id: currentUserId },
-    {
-      $addToSet: {
-        friends: friend._id,
-      },
-    },
+  const alreadyFriends = (currentUser.friends || []).some(
+    (existingFriendId) => String(existingFriendId) === String(friend._id),
   );
+
+  if (alreadyFriends) {
+    return;
+  }
+
+  await Promise.all([
+    User.updateOne(
+      { _id: currentUserId },
+      {
+        $addToSet: {
+          friends: friend._id,
+        },
+      },
+    ),
+    User.updateOne(
+      { _id: friend._id },
+      {
+        $addToSet: {
+          friends: currentUser._id,
+        },
+      },
+    ),
+    FriendRequest.deleteMany({
+      status: 'pending',
+      $or: [
+        { fromUser: currentUser._id, toUser: friend._id },
+        { fromUser: friend._id, toUser: currentUser._id },
+      ],
+    }),
+  ]);
 };
 
 const normalizeUser = (user) => ({
@@ -38,6 +71,8 @@ const normalizeUser = (user) => ({
   email: user.email,
   avatarDataUrl: user.avatarDataUrl || '',
 });
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const getFriendNetwork = async (currentUserId) => {
   const currentUser = await User.findById(currentUserId).populate('friends', '_id name email');
@@ -80,20 +115,10 @@ export const searchUsers = async ({ currentUserId, query }) => {
     throw createHttpError(404, 'User not found.');
   }
 
-  const pendingRequests = await FriendRequest.find({
-    status: 'pending',
-    $or: [{ fromUser: currentUserId }, { toUser: currentUserId }],
-  }).select('fromUser toUser');
-
   const blockedIds = new Set([
     String(currentUserId),
     ...(currentUser.friends || []).map((id) => String(id)),
   ]);
-
-  pendingRequests.forEach((request) => {
-    blockedIds.add(String(request.fromUser));
-    blockedIds.add(String(request.toUser));
-  });
 
   const normalizedQuery = String(query || '').trim();
   const filter = {
@@ -101,9 +126,10 @@ export const searchUsers = async ({ currentUserId, query }) => {
   };
 
   if (normalizedQuery) {
+    const safePattern = new RegExp(escapeRegex(normalizedQuery), 'i');
     filter.$or = [
-      { name: { $regex: normalizedQuery, $options: 'i' } },
-      { email: { $regex: normalizedQuery, $options: 'i' } },
+      { name: safePattern },
+      { email: safePattern },
     ];
   }
 

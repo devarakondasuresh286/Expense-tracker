@@ -13,6 +13,11 @@ const normalizeExpense = (expenseDoc) => ({
   groupId: expenseDoc.group ? String(expenseDoc.group._id || expenseDoc.group) : null,
   paidBy: String(expenseDoc.paidBy?._id || expenseDoc.paidBy),
   splitBetween: (expenseDoc.splitBetween || []).map((member) => String(member._id || member)),
+  splitMode: expenseDoc.splitMode || 'equal',
+  splitConfig: (expenseDoc.splitConfig || []).map((item) => ({
+    userId: String(item.user?._id || item.user),
+    amount: Number(item.amount || 0),
+  })),
   createdBy: String(expenseDoc.createdBy?._id || expenseDoc.createdBy),
 });
 
@@ -48,11 +53,25 @@ export const listExpenses = async ({ currentUserId, query }) => {
 };
 
 export const createExpense = async ({ currentUserId, payload }) => {
-  const { title, amount, category, type, notes = '', date, groupId = null, paidBy, splitBetween = [] } = payload;
+  const {
+    title,
+    amount,
+    category,
+    type,
+    notes = '',
+    date,
+    groupId = null,
+    paidBy,
+    splitBetween = [],
+    splitMode = 'equal',
+    splitConfig = [],
+  } = payload;
 
   let validatedGroupId = null;
   let validatedPaidBy = String(paidBy || currentUserId);
   let validatedSplitBetween = Array.from(new Set((splitBetween || []).map(String)));
+  let validatedSplitMode = 'equal';
+  let validatedSplitConfig = [];
 
   if (type === 'group') {
     const group = await Group.findOne({ _id: groupId, members: currentUserId }).select('_id members');
@@ -65,19 +84,54 @@ export const createExpense = async ({ currentUserId, payload }) => {
       throw createHttpError(400, 'paidBy should be a member of this group.');
     }
 
-    validatedSplitBetween = validatedSplitBetween.filter((memberId) => groupMemberIds.has(memberId));
-    if (validatedSplitBetween.length === 0) {
-      validatedSplitBetween = Array.from(groupMemberIds);
-    }
+    if (splitMode === 'custom') {
+      validatedSplitMode = 'custom';
 
-    if (!validatedSplitBetween.includes(validatedPaidBy)) {
-      validatedSplitBetween.push(validatedPaidBy);
+      const normalizedCustomRows = (splitConfig || [])
+        .map((item) => ({
+          userId: String(item?.userId || ''),
+          amount: Number(item?.amount || 0),
+        }))
+        .filter((item) => item.userId && item.amount >= 0 && groupMemberIds.has(item.userId));
+
+      const customByUser = normalizedCustomRows.reduce((acc, item) => {
+        acc[item.userId] = (acc[item.userId] || 0) + item.amount;
+        return acc;
+      }, {});
+
+      const totalCustom = Object.values(customByUser).reduce((sum, value) => sum + Number(value), 0);
+      if (Math.abs(totalCustom - Number(amount)) > 0.01) {
+        throw createHttpError(400, 'Custom split total must equal expense amount.');
+      }
+
+      validatedSplitConfig = Object.entries(customByUser).map(([userId, splitAmount]) => ({
+        user: userId,
+        amount: Number(splitAmount.toFixed(2)),
+      }));
+
+      validatedSplitBetween = validatedSplitConfig
+        .filter((item) => item.amount > 0)
+        .map((item) => String(item.user));
+    } else {
+      validatedSplitBetween = validatedSplitBetween.filter((memberId) => groupMemberIds.has(memberId));
+      if (validatedSplitBetween.length === 0) {
+        validatedSplitBetween = Array.from(groupMemberIds);
+      }
+
+      if (!validatedSplitBetween.includes(validatedPaidBy)) {
+        validatedSplitBetween.push(validatedPaidBy);
+      }
+
+      validatedSplitMode = 'equal';
+      validatedSplitConfig = [];
     }
 
     validatedGroupId = group._id;
   } else {
     validatedPaidBy = String(currentUserId);
     validatedSplitBetween = [];
+    validatedSplitMode = 'equal';
+    validatedSplitConfig = [];
   }
 
   const created = await Expense.create({
@@ -91,6 +145,8 @@ export const createExpense = async ({ currentUserId, payload }) => {
     group: validatedGroupId,
     paidBy: validatedPaidBy,
     splitBetween: validatedSplitBetween,
+    splitMode: validatedSplitMode,
+    splitConfig: validatedSplitConfig,
   });
 
   const populated = await Expense.findById(created._id)

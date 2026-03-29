@@ -6,6 +6,11 @@ const API_HEALTH_URL = `http://127.0.0.1:${API_PORT}/api/health`;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const wireChildShutdown = (child) => {
+  process.on('SIGINT', () => child.kill('SIGINT'));
+  process.on('SIGTERM', () => child.kill('SIGTERM'));
+};
+
 const hasHealthyApi = async () => {
   try {
     const controller = new AbortController();
@@ -22,6 +27,21 @@ const hasHealthyApi = async () => {
   } catch {
     return false;
   }
+};
+
+const waitForHealthyApi = async ({ timeoutMs = 45000, intervalMs = 1000 } = {}) => {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const healthy = await hasHealthyApi();
+    if (healthy) {
+      return true;
+    }
+
+    await wait(intervalMs);
+  }
+
+  return false;
 };
 
 const isPortInUse = (port) =>
@@ -47,37 +67,62 @@ const run = async () => {
     process.exit(1);
   }
 
-  const command = backendAlreadyRunning
-    ? 'npm run dev:client'
-    : 'npx concurrently "npm run server" "npm run dev:client"';
-
   if (backendAlreadyRunning) {
     console.log(`Port ${API_PORT} is already in use. Assuming backend is already running.`);
     console.log('Starting frontend only...');
+
+    const frontend = spawn('npm run dev:client', {
+      shell: true,
+      stdio: 'inherit',
+      windowsHide: false,
+    });
+
+    wireChildShutdown(frontend);
+    frontend.on('exit', (code) => {
+      process.exit(code ?? 0);
+    });
+    return;
   }
 
-  const child = spawn(command, {
+  const backend = spawn('npm run server', {
     shell: true,
     stdio: 'inherit',
     windowsHide: false,
   });
 
-  if (!backendAlreadyRunning) {
-    // Give backend a moment to boot before giving users clear diagnostics.
-    await wait(2000);
-    const isHealthy = await hasHealthyApi();
-    if (!isHealthy) {
-      console.warn(`Warning: API health check failed at ${API_HEALTH_URL}.`);
-      console.warn('Frontend started, but auth requests may fail until backend is healthy.');
-    }
+  wireChildShutdown(backend);
+
+  console.log(`Waiting for API health check at ${API_HEALTH_URL}...`);
+  const isHealthy = await waitForHealthyApi();
+
+  if (!isHealthy) {
+    console.error(`API did not become healthy at ${API_HEALTH_URL} within the timeout.`);
+    backend.kill('SIGTERM');
+    process.exit(1);
   }
 
-  child.on('exit', (code) => {
-    process.exit(code ?? 0);
+  console.log('API is healthy. Starting frontend...');
+
+  const frontend = spawn('npm run dev:client', {
+    shell: true,
+    stdio: 'inherit',
+    windowsHide: false,
   });
 
-  process.on('SIGINT', () => child.kill('SIGINT'));
-  process.on('SIGTERM', () => child.kill('SIGTERM'));
+  wireChildShutdown(frontend);
+
+  backend.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`Backend exited with code ${code}. Stopping frontend...`);
+      frontend.kill('SIGTERM');
+      process.exit(code);
+    }
+  });
+
+  frontend.on('exit', (code) => {
+    backend.kill('SIGTERM');
+    process.exit(code ?? 0);
+  });
 };
 
 run().catch((error) => {
